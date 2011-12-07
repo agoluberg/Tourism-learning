@@ -38,17 +38,19 @@ class ob:
     def flush(self):
         self.write(self.getvalue())
 
-def load_data(filename, nparray=True):
+def load_data(filename, nparray=True, feature_list=None):
     """
     Returns (features [m x n], labels [m x 1])
 
     filename - filename to parse
     nparray - return numpy array
+    feature_list - a list of feature numbers (which are used in the file) to load. If None, all the features are loaded
     """
     X = []
     Y = []
     i = 0
     f = open(filename, 'r')
+    if len(feature_list) == 0: feature_list = None
     for l in f:
         i += 1
         tokens = l.split(' ')
@@ -58,6 +60,9 @@ def load_data(filename, nparray=True):
             for t in tokens[1:]:
                 tokens2 = t.split(':')
                 if len(tokens2) == 2:
+                    if len(feature_list) and float(tokens2[0]) not in feature_list:
+                        # we skip this feature 
+                        continue
                     x = float(tokens2[1])
                 else:
                     x = 0.0
@@ -94,10 +99,15 @@ op.add_option('-d',
               help='training and test file (will be divided into training/validation/test sets',
               dest='data',
               default=None)
+op.add_option('-r',
+              '--results',
+              help='results file. if omitted, data filename + date will be used',
+              dest='results',
+              default=None)
 op.add_option('-f',
               '--features',
               help='which features to use (use the number in the file)',
-              dest='data',
+              dest='features',
               default=None)
 
 (options, args) = op.parse_args()
@@ -111,14 +121,20 @@ bln_write_model = True
 
 testX = None
 
+feature_list = []
+if options.features:
+    print options.features
+    feature_list = map(lambda s : int(s), options.features.split(','))
+    print feature_list
+    
 if options.prefix:
     prefix = options.prefix
     
     #prefix = 'data/tallinn_201s_title_rdist_10000'
-    X, y = load_data(prefix + '.train')
+    X, y = load_data(prefix + '.train', feature_list=feature_list)
     #print y.shape
     #X, y = load_svmlight_file(prefix + '.train')
-    testX, testY = load_data(prefix + '.test')
+    testX, testY = load_data(prefix + '.test', feature_list=feature_list)
     
     X = vstack((X, testX))
     X = preprocessing.scale(X)
@@ -133,7 +149,7 @@ if options.prefix:
 
 if options.data:
     log('loading ' + str(options.data))
-    X, y = load_data(options.data)
+    X, y = load_data(options.data, feature_list=feature_list)
     if False:
         pos_start = 0
         pos_end = 1500
@@ -256,8 +272,11 @@ for score_name, score_func in scores:
         pickle.dump(clf.best_estimator, open(FILES_PATH + '/' + fname, 'w'))
         
         # results
-        fname = 'results_' + mname + '_' + str(strtime) + '.results'
-        fresults = open(RESULT_FILES_PATH + '/' + fname, 'w')
+        if options.results:
+            fname = options.results
+        else:
+            fname = RESULT_FILES_PATH + '/' + 'results_' + mname + '_' + str(strtime) + '.results'
+        fresults = open(fname, 'w')
         fresults.write(str_output)
         fresults.close()
     
